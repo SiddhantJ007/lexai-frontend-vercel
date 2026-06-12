@@ -103,6 +103,18 @@ function renderOutput(title, text) {
   nodes.feedbackControls.style.display = "flex";
   nodes.variantsSection.style.display = "none";
   nodes.variantList.innerHTML = "";
+  focusResultCard();
+}
+
+function focusResultCard() {
+  if (!nodes.resultCard) return;
+  window.setTimeout(() => {
+    nodes.resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    const copyButton = document.getElementById("copyBtn");
+    if (copyButton instanceof HTMLButtonElement) {
+      copyButton.focus();
+    }
+  }, 80);
 }
 
 function focusVariantsSection() {
