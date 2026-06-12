@@ -92,6 +92,15 @@ function renderOutput(title, text) {
   nodes.variantList.innerHTML = "";
 }
 
+function focusVariantsSection() {
+  if (!nodes.variantsSection) return;
+  nodes.variantsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  const firstAction = nodes.variantList?.querySelector("button");
+  if (firstAction instanceof HTMLButtonElement) {
+    window.setTimeout(() => firstAction.focus(), 250);
+  }
+}
+
 function renderFeedbackRows(rows) {
   if (!rows.length) {
     nodes.feedbackBody.innerHTML = '<tr><td colspan="5">No feedback saved yet.</td></tr>';
@@ -320,7 +329,11 @@ async function generateVariants() {
         </div>
       </li>
     `).join("");
+    if (state.variants.length && nodes.variantsChk) {
+      nodes.variantsChk.checked = true;
+    }
     setStatus(nodes.formStatus, state.variants.length ? "Alternative outputs ready." : "No alternatives returned.");
+    if (state.variants.length) focusVariantsSection();
     await refreshQuota();
   } catch (error) {
     setStatus(nodes.formStatus, `Could not generate alternatives: ${error.message}`, true);
@@ -345,6 +358,9 @@ async function handleVariantVote(event) {
         rating: button.dataset.rating
       })
     });
+    if (nodes.variantsChk) {
+      nodes.variantsChk.checked = true;
+    }
     await loadFeedbacks();
     button.closest("li").style.opacity = ".65";
     setStatus(nodes.formStatus, "Variant feedback saved.");
