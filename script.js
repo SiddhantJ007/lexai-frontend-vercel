@@ -37,12 +37,25 @@ const nodes = {
   quotaBar: document.getElementById("quotaBar"),
   quotaWrap: document.getElementById("quotaWrap"),
   filterSelect: document.getElementById("filterSelect"),
-  variantsChk: document.getElementById("variantsChk")
+  variantsChk: document.getElementById("variantsChk"),
+  busyOverlay: document.getElementById("busyOverlay"),
+  busyText: document.getElementById("busyText")
 };
 
 function setStatus(el, msg, isError = false) {
   el.textContent = msg;
   el.style.color = isError ? "#c84c31" : "#5e6a76";
+}
+
+function setBusy(active, message = "Working...") {
+  if (!nodes.busyOverlay || !nodes.busyText) return;
+  nodes.busyText.textContent = message;
+  nodes.busyOverlay.classList.toggle("active", active);
+  nodes.busyOverlay.setAttribute("aria-hidden", active ? "false" : "true");
+  document.querySelectorAll("button, select, textarea, input[type='file']").forEach((el) => {
+    el.disabled = active;
+  });
+  if (!active) syncModeUi();
 }
 
 function activeMode() {
@@ -306,6 +319,7 @@ async function generateVariants() {
     return;
   }
   setStatus(nodes.formStatus, "Generating alternative outputs...");
+  setBusy(true, "Generating 5 alternative outputs...");
 
   try {
     const data = await requestJson("/copy-variants/", {
@@ -337,6 +351,8 @@ async function generateVariants() {
     await refreshQuota();
   } catch (error) {
     setStatus(nodes.formStatus, `Could not generate alternatives: ${error.message}`, true);
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -379,6 +395,7 @@ async function critiqueAndRegenerate() {
   if (!reason) return;
 
   setStatus(nodes.formStatus, "Regenerating from critique...");
+  setBusy(true, "Regenerating translation from your critique...");
   try {
     const data = await requestJson("/feedback/regenerate", {
       method: "POST",
@@ -401,6 +418,8 @@ async function critiqueAndRegenerate() {
     setStatus(nodes.formStatus, "Regenerated output ready.");
   } catch (error) {
     setStatus(nodes.formStatus, `Regeneration failed: ${error.message}`, true);
+  } finally {
+    setBusy(false);
   }
 }
 

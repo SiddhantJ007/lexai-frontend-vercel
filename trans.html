@@ -291,9 +291,53 @@
       padding:10px 12px;
       border-radius:12px;
     }
+    .spinner-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(246,247,251,.72);
+      backdrop-filter:blur(3px);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:1000;
+      padding:24px;
+    }
+    .spinner-overlay.active{display:flex}
+    .spinner-card{
+      min-width:min(320px, 92vw);
+      background:rgba(255,255,255,.96);
+      border:1px solid var(--line);
+      border-radius:22px;
+      box-shadow:var(--shadow);
+      padding:24px 22px;
+      text-align:center;
+    }
+    .spinner-ring{
+      width:42px;
+      height:42px;
+      margin:0 auto 14px;
+      border-radius:50%;
+      border:4px solid #d7e4e7;
+      border-top-color:var(--accent);
+      animation:spin .85s linear infinite;
+    }
+    .spinner-text{
+      color:var(--ink);
+      font-weight:700;
+      letter-spacing:-.01em;
+    }
+    @keyframes spin{
+      to{transform:rotate(360deg)}
+    }
   </style>
 </head>
 <body>
+  <div id="busyOverlay" class="spinner-overlay" aria-hidden="true">
+    <div class="spinner-card" role="status" aria-live="polite">
+      <div class="spinner-ring"></div>
+      <div id="busyText" class="spinner-text">Working…</div>
+    </div>
+  </div>
   <main class="shell">
     <div class="topbar">
       <a class="brand" href="index.html">LexAi</a>
@@ -311,13 +355,7 @@
     <section class="hero">
       <span class="pill">Translation Workflow</span>
       <h1>Multilingual content demo</h1>
-      <p>
-        This live public version runs against a real FastAPI backend. Translation, rewriting, variants,
-        feedback, regeneration, CSV export, and email generation remain real. OCR is intentionally limited
-        to Vercel-safe behavior in Phase 1.
-      </p>
-      <p class="hint">Sanitized live demo. Private keys, client data, and original deployment details have been removed.</p>
-      <div class="health" id="backendHealth">Checking backend connection…</div>
+            <div class="health" id="backendHealth">Checking backend connection…</div>
     </section>
 
     <section class="layout">
@@ -377,10 +415,9 @@
           </div>
         </div>
 
-        <label for="fileInput">Optional OCR input</label>
+        <label for="fileInput">Upload a PDF/Image</label>
         <input id="fileInput" type="file" accept=".pdf,image/*">
-        <p class="hint">Text-based PDFs under 4 MB are supported in Phase 1. Image OCR and scanned-PDF OCR are not enabled in this Vercel deployment yet.</p>
-
+        
         <div class="actions">
           <button class="primary" id="runBtn" type="button">Run Workflow</button>
           <button class="secondary" id="uploadBtn" type="button">Extract Text From File</button>
