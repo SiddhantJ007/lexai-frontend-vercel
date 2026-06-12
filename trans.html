@@ -45,6 +45,7 @@
       display:flex;
       flex-wrap:wrap;
       gap:10px;
+      align-items:center;
     }
     .toplinks a{
       text-decoration:none;
@@ -247,6 +248,49 @@
       color:var(--muted);
       font-size:.92rem;
     }
+    .quota-wrap{
+      width:96px;
+      height:8px;
+      border-radius:999px;
+      background:#e0e7ef;
+      position:relative;
+      overflow:hidden;
+      display:inline-block;
+      vertical-align:middle;
+    }
+    .quota-bar{
+      position:absolute;
+      inset:0 auto 0 0;
+      width:0%;
+      border-radius:999px;
+      background:linear-gradient(90deg,#0f8b8d 0%,#18b3a7 100%);
+      transition:width .25s ease;
+    }
+    .quota-label{
+      font-size:.82rem;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .toolbar-meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-top:12px;
+      align-items:center;
+    }
+    .toolbar-meta label{
+      margin:0;
+      font-weight:600;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .toolbar-meta select{
+      width:auto;
+      min-width:140px;
+      padding:10px 12px;
+      border-radius:12px;
+    }
   </style>
 </head>
 <body>
@@ -254,6 +298,10 @@
     <div class="topbar">
       <a class="brand" href="index.html">LexAi</a>
       <nav class="toplinks">
+        <span class="quota-label">Daily quota</span>
+        <span id="quotaWrap" class="quota-wrap" title="Daily character quota">
+          <span id="quotaBar" class="quota-bar"></span>
+        </span>
         <a href="index.html">Portfolio Home</a>
         <a href="emails-demo.html">Email Demo</a>
         <a href="../README.md">README</a>
@@ -268,6 +316,7 @@
         feedback, regeneration, CSV export, and email generation remain real. OCR is intentionally limited
         to Vercel-safe behavior in Phase 1.
       </p>
+      <p class="hint">Sanitized live demo. Private keys, client data, and original deployment details have been removed.</p>
       <div class="health" id="backendHealth">Checking backend connection…</div>
     </section>
 
@@ -365,8 +414,18 @@
         </p>
         <div class="toolbar">
           <button class="secondary" id="refreshBtn" type="button">Refresh</button>
-          <button class="ghost" id="downloadBtn" type="button">Download CSV</button>
+          <button class="ghost" id="downloadBtn" type="button">Download Excel</button>
           <button class="danger" id="clearFeedbackBtn" type="button">Clear History</button>
+        </div>
+        <div class="toolbar-meta">
+          <label for="filterSelect">Filter
+            <select id="filterSelect">
+              <option value="all" selected>All</option>
+              <option value="Good">Good</option>
+              <option value="Bad">Bad</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="variantsChk"> Include variant ratings</label>
         </div>
         <div class="status" id="tableStatus"></div>
         <div class="table-wrap">

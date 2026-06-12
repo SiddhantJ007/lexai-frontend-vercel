@@ -14,7 +14,9 @@ const sessionId = (() => {
 
 const state = {
   current: null,
-  variants: []
+  variants: [],
+  allFeedbacks: [],
+  quotaLeft: Infinity
 };
 
 const nodes = {
@@ -31,7 +33,11 @@ const nodes = {
   variantsSection: document.getElementById("variantsSection"),
   variantList: document.getElementById("variantList"),
   feedbackBody: document.getElementById("feedbackBody"),
-  backendHealth: document.getElementById("backendHealth")
+  backendHealth: document.getElementById("backendHealth"),
+  quotaBar: document.getElementById("quotaBar"),
+  quotaWrap: document.getElementById("quotaWrap"),
+  filterSelect: document.getElementById("filterSelect"),
+  variantsChk: document.getElementById("variantsChk")
 };
 
 function setStatus(el, msg, isError = false) {
@@ -103,6 +109,14 @@ function renderFeedbackRows(rows) {
   `).join("");
 }
 
+function filteredFeedbackRows() {
+  const filter = nodes.filterSelect?.value || "all";
+  return state.allFeedbacks.filter((row) => {
+    if (filter === "all") return true;
+    return String(row.feedback || "").startsWith(filter);
+  });
+}
+
 function escapeHtml(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -115,12 +129,43 @@ function escapeHtml(text) {
 async function loadFeedbacks() {
   setStatus(nodes.tableStatus, "Loading feedback history...");
   try {
-    const rows = await requestJson("/feedbacks/");
-    renderFeedbackRows(rows);
-    setStatus(nodes.tableStatus, rows.length ? `Loaded ${rows.length} saved rows.` : "No saved rows yet.");
+    const includeVariants = nodes.variantsChk?.checked ? "true" : "false";
+    const rows = await requestJson(`/feedbacks/?include_variants=${includeVariants}`);
+    state.allFeedbacks = rows;
+    const visibleRows = filteredFeedbackRows();
+    renderFeedbackRows(visibleRows);
+    setStatus(
+      nodes.tableStatus,
+      visibleRows.length
+        ? `Loaded ${visibleRows.length} visible rows from ${rows.length} saved rows.`
+        : "No saved rows yet."
+    );
   } catch (error) {
+    state.allFeedbacks = [];
     renderFeedbackRows([]);
     setStatus(nodes.tableStatus, `Could not load feedback history: ${error.message}`, true);
+  }
+}
+
+function renderQuota(limit, used, day) {
+  if (!nodes.quotaBar || !nodes.quotaWrap) return;
+  const max = Number(limit) || 0;
+  const usedVal = Number(used) || 0;
+  const left = Math.max(0, max - usedVal);
+  const pct = max > 0 ? Math.min(100, Math.round((usedVal / max) * 100)) : 0;
+  state.quotaLeft = Number.isFinite(left) ? left : Infinity;
+  nodes.quotaBar.style.width = `${pct}%`;
+  nodes.quotaWrap.title = `Daily quota: ${usedVal.toLocaleString()} / ${max.toLocaleString()} chars - ${day} (ET)`;
+}
+
+async function refreshQuota() {
+  if (!API_BASE) return;
+  try {
+    const payload = await requestJson("/quota", { cache: "no-store" });
+    renderQuota(payload.limit, payload.used, payload.day);
+  } catch {
+    state.quotaLeft = Infinity;
+    if (nodes.quotaBar) nodes.quotaBar.style.width = "0%";
   }
 }
 
@@ -146,6 +191,11 @@ async function checkBackendHealth() {
   }
 }
 
+function hasQuotaForText(text) {
+  if (!Number.isFinite(state.quotaLeft)) return true;
+  return text.length <= state.quotaLeft;
+}
+
 async function runWorkflow() {
   const prompt = nodes.prompt.value.trim();
   if (!prompt) {
@@ -155,6 +205,10 @@ async function runWorkflow() {
 
   const mode = activeMode();
   const model = nodes.model.value;
+  if (mode === "translate" && !hasQuotaForText(prompt)) {
+    setStatus(nodes.formStatus, "That text exceeds the remaining daily quota for this browser session.", true);
+    return;
+  }
   setStatus(nodes.formStatus, "Running workflow...");
   resetOutput();
 
@@ -189,6 +243,7 @@ async function runWorkflow() {
     }
 
     setStatus(nodes.formStatus, "Workflow completed.");
+    if (mode === "translate") await refreshQuota();
   } catch (error) {
     setStatus(nodes.formStatus, `Workflow failed: ${error.message}`, true);
   }
@@ -237,6 +292,10 @@ async function saveFeedback(type) {
 
 async function generateVariants() {
   if (!state.current) return;
+  if (!hasQuotaForText(state.current.original_prompt)) {
+    setStatus(nodes.formStatus, "Generating variants would exceed the remaining daily quota.", true);
+    return;
+  }
   setStatus(nodes.formStatus, "Generating alternative outputs...");
 
   try {
@@ -262,6 +321,7 @@ async function generateVariants() {
       </li>
     `).join("");
     setStatus(nodes.formStatus, state.variants.length ? "Alternative outputs ready." : "No alternatives returned.");
+    await refreshQuota();
   } catch (error) {
     setStatus(nodes.formStatus, `Could not generate alternatives: ${error.message}`, true);
   }
@@ -299,7 +359,7 @@ async function critiqueAndRegenerate() {
     return;
   }
 
-  const reason = window.prompt("What should change in this output?");
+  const reason = window.prompt("What went wrong with this translation?");
   if (!reason) return;
 
   setStatus(nodes.formStatus, "Regenerating from critique...");
@@ -321,15 +381,20 @@ async function critiqueAndRegenerate() {
     renderOutput("Regenerated Output", data.new_translation);
     nodes.prompt.value = data.improved_prompt;
     await loadFeedbacks();
+    await refreshQuota();
     setStatus(nodes.formStatus, "Regenerated output ready.");
   } catch (error) {
     setStatus(nodes.formStatus, `Regeneration failed: ${error.message}`, true);
   }
 }
 
-async function downloadCsv() {
+async function downloadFeedbackExport() {
   try {
-    const response = await api("/feedbacks/download");
+    const params = new URLSearchParams();
+    const filter = nodes.filterSelect?.value || "all";
+    if (filter !== "all") params.set("type", filter);
+    params.set("include_variants", nodes.variantsChk?.checked ? "true" : "false");
+    const response = await api(`/feedbacks/download?${params.toString()}`);
     if (!response.ok) {
       const payload = await parseJson(response);
       throw new Error(payload.detail || "Download failed");
@@ -338,14 +403,14 @@ async function downloadCsv() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "lexai_feedbacks.csv";
+    link.download = "lexai_feedbacks.xlsx";
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setStatus(nodes.tableStatus, "CSV downloaded.");
+    setStatus(nodes.tableStatus, "Excel export downloaded.");
   } catch (error) {
-    setStatus(nodes.tableStatus, `Could not download CSV: ${error.message}`, true);
+    setStatus(nodes.tableStatus, `Could not download export: ${error.message}`, true);
   }
 }
 
@@ -385,7 +450,7 @@ document.getElementById("clearInputBtn").addEventListener("click", () => {
 document.getElementById("goodBtn").addEventListener("click", async () => {
   try {
     const saved = await saveFeedback("Good");
-    if (saved && window.confirm("Saved. Generate alternative outputs?")) {
+    if (saved && window.confirm("Saved. Would you like 5 alternative suggestions?")) {
       await generateVariants();
     }
   } catch (error) {
@@ -395,13 +460,25 @@ document.getElementById("goodBtn").addEventListener("click", async () => {
 document.getElementById("badBtn").addEventListener("click", critiqueAndRegenerate);
 document.getElementById("copyBtn").addEventListener("click", copyOutput);
 document.getElementById("refreshBtn").addEventListener("click", loadFeedbacks);
-document.getElementById("downloadBtn").addEventListener("click", downloadCsv);
+document.getElementById("downloadBtn").addEventListener("click", downloadFeedbackExport);
 document.getElementById("clearFeedbackBtn").addEventListener("click", clearFeedbacks);
 nodes.variantList.addEventListener("click", handleVariantVote);
+nodes.filterSelect?.addEventListener("change", () => {
+  const visibleRows = filteredFeedbackRows();
+  renderFeedbackRows(visibleRows);
+  setStatus(
+    nodes.tableStatus,
+    visibleRows.length
+      ? `Showing ${visibleRows.length} filtered rows from ${state.allFeedbacks.length} saved rows.`
+      : "No feedback rows match the current filter."
+  );
+});
+nodes.variantsChk?.addEventListener("change", loadFeedbacks);
 document.querySelectorAll('input[name="mode"]').forEach((radio) => {
   radio.addEventListener("change", syncModeUi);
 });
 
 syncModeUi();
 checkBackendHealth();
+refreshQuota();
 loadFeedbacks();
