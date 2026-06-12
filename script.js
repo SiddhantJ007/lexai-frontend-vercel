@@ -174,7 +174,8 @@ function renderQuota(limit, used, day) {
   const max = Number(limit) || 0;
   const usedVal = Number(used) || 0;
   const left = Math.max(0, max - usedVal);
-  const pct = max > 0 ? Math.min(100, Math.round((usedVal / max) * 100)) : 0;
+  const rawPct = max > 0 ? (usedVal / max) * 100 : 0;
+  const pct = usedVal > 0 ? Math.max(8, Math.min(100, Math.round(rawPct))) : 0;
   state.quotaLeft = Number.isFinite(left) ? left : Infinity;
   nodes.quotaBar.style.width = `${pct}%`;
   nodes.quotaWrap.title = `Daily quota: ${usedVal.toLocaleString()} / ${max.toLocaleString()} chars - ${day} (ET)`;
@@ -232,6 +233,7 @@ async function runWorkflow() {
     return;
   }
   setStatus(nodes.formStatus, "Running workflow...");
+  setBusy(true, mode === "rephrase" ? "Rewriting English copy..." : "Running translation workflow...");
   resetOutput();
 
   try {
@@ -268,6 +270,8 @@ async function runWorkflow() {
     if (mode === "translate") await refreshQuota();
   } catch (error) {
     setStatus(nodes.formStatus, `Workflow failed: ${error.message}`, true);
+  } finally {
+    setBusy(false);
   }
 }
 
